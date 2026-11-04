@@ -28,6 +28,7 @@ _APPLICATION_SCHEMA: dict[str, Any] = {
     "Last update": {"date": {}},
     "Next step": {"rich_text": {}},
     "Thread ID": {"rich_text": {}},
+    "Action": {"rich_text": {}},
 }
 _SUMMARY_SCHEMA: dict[str, Any] = {
     "Date": {"title": {}},

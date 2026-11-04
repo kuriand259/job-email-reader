@@ -29,6 +29,24 @@ python -m job_email_reader.cli classify --model groq
 python -m job_email_reader.cli summary --model groq
 ```
 
+## GitHub cron
+
+GitHub Actions can run that pair every day while this computer is off. Put the workflow in `.github/workflows/daily.yml`. It runs at 8:15 Asia/Kolkata from the default branch. The schedule can start late. **Run workflow** on the Actions tab starts it by hand.
+
+Each run is a blank machine, so the Gmail login is stored as secrets rather than committed:
+
+```bash
+gh secret set ENV_FILE < .env
+gh secret set GMAIL_TOKEN < token.json
+gh secret set GMAIL_CREDENTIALS < credentials.json
+```
+
+`GMAIL_TOKEN` is the contents of `token.json`. The workflow writes that secret back to `token.json` before `classify`. The refresh token inside it keeps the login alive, so the browser step does not run again. When the access token expires, that run refreshes it. The next day starts again from the same secret.
+
+`out/processed.json` is the list of Gmail message ids already written to Notion. It is not committed. The workflow restores one Actions cache entry named `processed-ids` into `out/processed.json`, runs `classify`, deletes that cache entry, and saves the updated file under the same name. `summary` runs after the save. The file stays small: it is only those ids, and a year of mail is still a few hundred kilobytes.
+
+The cache starts empty. The first GitHub run does not see the `out/processed.json` already on your computer, so mail from the last day can get a second Notion note. Later runs skip the ids saved in the cache. GitHub drops a cache that nobody reads for 7 days. A daily run keeps it.
+
 ## Commands
 
 `fetch` only prints matching mail. It does not call a model or Notion.

@@ -1,0 +1,26 @@
+[project]
+name = "job-email-reader"
+version = "0.1.0"
+description = "Read and classify job-related emails"
+requires-python = ">=3.11"
+dependencies = [
+    "google-api-python-client",
+    "google-auth-oauthlib",
+    "google-genai",
+    "groq",
+    "notion-client>=3",
+    "pydantic",
+    "python-dotenv",
+    "typer",
+    "rich",
+]
+
+[project.scripts]
+job-email-reader = "job_email_reader.cli:app"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

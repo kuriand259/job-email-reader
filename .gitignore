@@ -1,0 +1,9 @@
+credentials.json
+token.json
+.env
+.venv
+out/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/

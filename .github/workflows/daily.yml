@@ -1,0 +1,56 @@
+name: Daily job emails
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 8 * * *"
+      timezone: "Asia/Kolkata"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Kolkata
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: out/processed.json
+          key: processed-ids
+
+      - name: Restore local files
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          GMAIL_CREDENTIALS: ${{ secrets.GMAIL_CREDENTIALS }}
+          GMAIL_TOKEN: ${{ secrets.GMAIL_TOKEN }}
+        run: |
+          printf '%s\n' "$ENV_FILE" > .env
+          printf '%s\n' "$GMAIL_CREDENTIALS" > credentials.json
+          printf '%s\n' "$GMAIL_TOKEN" > token.json
+
+      - run: python -m job_email_reader.cli classify --model groq
+
+      - name: Delete the previous processed-id cache
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test -f out/processed.json || exit 0
+          gh cache delete processed-ids --repo "$GITHUB_REPOSITORY" || true
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: out/processed.json
+          key: processed-ids
+
+      - run: python -m job_email_reader.cli summary --model groq

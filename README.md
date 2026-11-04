@@ -33,7 +33,7 @@ python -m job_email_reader.cli summary --model groq
 
 GitHub Actions can run that pair every day while this computer is off. Put the workflow in `.github/workflows/daily.yml`. It runs at 8:15 Asia/Kolkata from the default branch. The schedule can start late. **Run workflow** on the Actions tab starts it by hand.
 
-Each run is a blank machine, so the Gmail login is stored as secrets rather than committed:
+Each run is a blank machine, so the Gmail login and `.env` are stored as secrets rather than committed. From the project directory:
 
 ```bash
 gh secret set ENV_FILE < .env
@@ -41,7 +41,11 @@ gh secret set GMAIL_TOKEN < token.json
 gh secret set GMAIL_CREDENTIALS < credentials.json
 ```
 
-`GMAIL_TOKEN` is the contents of `token.json`. The workflow writes that secret back to `token.json` before `classify`. The refresh token inside it keeps the login alive, so the browser step does not run again. When the access token expires, that run refreshes it. The next day starts again from the same secret.
+`ENV_FILE` is the whole `.env`: the API keys, `NOTION_PAGE_ID`, `LOOKBACK_DAYS`, and `MAX_EMAILS`. The workflow writes that secret to `.env` in the job directory before `classify`. A change on this computer does not reach GitHub until you run `gh secret set ENV_FILE < .env` again.
+
+`GMAIL_TOKEN` is the contents of `token.json`, and `GMAIL_CREDENTIALS` is the contents of `credentials.json`. The workflow writes both files back before `classify`. The refresh token inside `token.json` keeps the login alive, so the browser step does not run again. When the access token expires, that run refreshes it. The next day starts again from the same secret.
+
+The names are listed under **Settings → Secrets and variables → Actions**. GitHub does not show the saved values. Use **Update** there, or the `gh secret set` commands above, to replace one.
 
 `out/processed.json` is the list of Gmail message ids already written to Notion. It is not committed. The workflow restores one Actions cache entry named `processed-ids` into `out/processed.json`, runs `classify`, deletes that cache entry, and saves the updated file under the same name. `summary` runs after the save. The file stays small: it is only those ids, and a year of mail is still a few hundred kilobytes.
 

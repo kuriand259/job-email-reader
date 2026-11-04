@@ -83,7 +83,7 @@ def _header(headers: list[dict], name: str) -> str:
 
 
 def _env_int(name: str, default: int) -> int:
-    load_dotenv()
+    load_dotenv(os.path.join(os.getcwd(), ".env"))
     raw = os.getenv(name, str(default)).strip() or str(default)
     try:
         value = int(raw)

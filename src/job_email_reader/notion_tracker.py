@@ -38,7 +38,7 @@ _source_cache: dict[str, tuple[str, dict[str, Any]]] = {}
 
 
 def _optional_env(name: str) -> str:
-    load_dotenv()
+    load_dotenv(os.path.join(os.getcwd(), ".env"))
     return os.getenv(name, "").strip()
 
 

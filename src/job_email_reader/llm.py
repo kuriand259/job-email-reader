@@ -20,7 +20,7 @@ class LLMProvider(Protocol):
 
 
 def _api_key(name: str) -> str:
-    load_dotenv()
+    load_dotenv(os.path.join(os.getcwd(), ".env"))
     value = os.getenv(name, "").strip()
     if not value:
         raise RuntimeError(f"{name} is not set")
@@ -117,7 +117,7 @@ class GroqProvider:
 
 
 def get_provider(model: str | None = None) -> LLMProvider:
-    load_dotenv()
+    load_dotenv(os.path.join(os.getcwd(), ".env"))
     name = (model or os.getenv("LLM_PROVIDER") or "gemini").strip().lower()
     if name == "gemini":
         return GeminiProvider()

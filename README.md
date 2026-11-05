@@ -62,7 +62,19 @@ gh secret set GMAIL_CREDENTIALS < credentials.json
 
 `ENV_FILE` is the whole `.env`: the API keys, `NOTION_PAGE_ID`, `LOOKBACK_DAYS`, and `MAX_EMAILS`. The workflow writes that secret to `.env` in the job directory before `classify`. A change on this computer does not reach GitHub until you run `gh secret set ENV_FILE < .env` again.
 
-`GMAIL_TOKEN` is the contents of `token.json`, and `GMAIL_CREDENTIALS` is the contents of `credentials.json`. The workflow writes both files back before `classify`. The refresh token inside `token.json` keeps the login alive, so the browser step does not run again. When the access token expires, that run refreshes it. The next day starts again from the same secret.
+`GMAIL_TOKEN` is the contents of `token.json`, and `GMAIL_CREDENTIALS` is the contents of `credentials.json`. The workflow writes both files back before `classify`. When the access token expires, that run refreshes it from the refresh token in the secret. The next day starts again from the same secret. `credentials.json` does not need a refresh.
+
+The Cloud app stays in **Testing**. Publishing it to production requires a public homepage and a privacy policy on a domain you own, and this project has neither. In Testing, Google expires the refresh token 7 days after the browser sign-in. The daily job then fails. Sign in again from the project directory and replace the secret:
+
+```bash
+rm -f token.json
+python -m job_email_reader.cli fetch
+gh secret set GMAIL_TOKEN < token.json
+```
+
+Remove `token.json` first. A dead refresh token makes the client try to refresh and exit, so the browser does not open while that file is still there. A Google password change, or removing the app on the Google Account security page, ends the token before the week is up.
+
+IMAP with a Gmail app password would skip this weekly sign-in. That path was not used. The password would live in the `ENV_FILE` secret, and it can read, send, and permanently delete mail. The OAuth token has `gmail.readonly` and `gmail.compose`. Compose can create drafts and send, and it cannot permanently delete mail. Google also hides app passwords unless 2-Step Verification is on, and they are unavailable with Advanced Protection or with 2-Step Verification that uses only security keys.
 
 The names are listed under **Settings → Secrets and variables → Actions**. GitHub does not show the saved values. Use **Update** there, or the `gh secret set` commands above, to replace one.
 
@@ -98,3 +110,39 @@ python -m job_email_reader.cli --model gemini summary
 ```
 
 With the package installed, the same commands are available as `job-email-reader` instead of `python -m job_email_reader.cli`.
+
+## Follow-up agent
+
+The Gmail login asks for `gmail.readonly` and `gmail.compose`. If `token.json` does not include `gmail.compose`, the next Gmail call deletes it and opens a browser. Sign in once from this computer and update `GMAIL_TOKEN` before the next Actions run. A runner cannot open that browser, so the job stops until the secret is replaced.
+
+`draft-replies` reads the classified job emails and may create a Gmail draft. It uses the cache from `classify` when that file is still there. `summary` deletes the cache, so a later run, including the Actions step, reads `out/results.json` from that `classify` instead. Application acknowledgements and rejections are skipped before the model runs. A thread listed in `out/drafted.json` is skipped.
+
+The model can call four tools:
+
+- `get_thread` reads the Gmail thread. Each message has from, to, date, subject, a body of at most 3000 characters, and the Message-ID header.
+- `lookup_tracker_row` reads the Notion row for the company.
+- `create_gmail_draft` creates an unsent reply with `Re:`, `In-Reply-To`, `References`, and the Gmail thread id. It calls `users.drafts.create` only.
+- `finish` records `draft` or `skip` and a one-sentence reason.
+
+The loop loads `prompts/followup_agent.md`, then calls the model until `finish` or `--max-steps` (default 6). Each tool call is printed and appended to `out/agent_traces/<date>.jsonl`. A tool failure comes back as `{"error": "..."}` and the loop keeps going. Gemini and Groq both go through `chat_with_tools`.
+
+Drafts stay under 120 words, use plain English, and end with `Regards, Kurian`. Missing facts are written as `[AVAILABILITY]` or `[CONFIRM]`. The prompt answers interview invites, recruiter questions, assessment scheduling, and requests for availability or documents. It skips auto-acknowledgements, rejections, newsletters, and no-reply mail.
+
+Nothing in this path sends mail. `--dry-run` logs `create_gmail_draft` and returns `{"dry_run": true}` without calling Gmail. The daily workflow runs `draft-replies --model groq` only when the **Run workflow** input `draft_replies` is checked, or the repository variable `DRAFT_REPLIES` is `true`. The morning schedule does neither unless that variable is set.
+
+```bash
+python -m job_email_reader.cli draft-replies --days 7 --model gemini --dry-run --max-steps 6 --limit 10
+python -m job_email_reader.cli draft-test --thread-id THREAD_ID
+python -m job_email_reader.cli tool-smoke --model groq
+```
+
+A dry run appends lines like these:
+
+```json
+{"tool": "get_thread", "arguments": {"thread_id": "18c2"}, "result": {"messages": [{"from": "recruiter@acme.com", "subject": "Interview", "message_id": "<m@acme.com>"}]}}
+{"tool": "lookup_tracker_row", "arguments": {"company": "Acme"}, "result": {"found": true, "status": "Interviewing", "role": "Engineer"}}
+{"tool": "create_gmail_draft", "arguments": {"thread_id": "18c2", "to": "recruiter@acme.com"}, "result": {"dry_run": true}}
+{"tool": "finish", "arguments": {"decision": "draft", "reason": "They asked for a time."}, "result": {"decision": "draft", "reason": "They asked for a time."}}
+```
+
+The printed line is the company, the decision, the reason, and whether a draft was created: `Acme / draft / They asked for a time. / draft created: false`.

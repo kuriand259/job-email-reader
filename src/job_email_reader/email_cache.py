@@ -45,6 +45,7 @@ def cache_email(email: Email, result: JobEmailResult) -> None:
         return
     record = {
         "id": email.id,
+        "thread_id": email.thread_id,
         "day": local_day(email.date),
         "from": email.from_,
         "subject": email.subject,
@@ -63,6 +64,7 @@ def cache_email(email: Email, result: JobEmailResult) -> None:
 def _day_email(row: dict) -> DayEmail:
     return DayEmail(
         id=row.get("id", ""),
+        thread_id=row.get("thread_id", ""),
         day=row.get("day", ""),
         from_=row.get("from", ""),
         subject=row.get("subject", ""),

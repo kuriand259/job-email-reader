@@ -28,6 +28,7 @@ Category = Literal[
 
 class DayEmail(BaseModel):
     id: str = ""
+    thread_id: str = ""
     day: str = ""
     from_: str = ""
     subject: str = ""

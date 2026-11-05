@@ -15,6 +15,9 @@ dependencies = [
     "rich",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [project.scripts]
 job-email-reader = "job_email_reader.cli:app"
 

@@ -1,8 +1,11 @@
 """Gmail API client."""
 
 import base64
+import json
 import os
 import re
+import sys
+from email.message import EmailMessage
 from html import unescape
 from pathlib import Path
 
@@ -14,17 +17,47 @@ from googleapiclient.discovery import build
 
 from job_email_reader.models import Email
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.compose",
+]
+_COMPOSE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
 CREDENTIALS_PATH = Path("credentials.json")
 TOKEN_PATH = Path("token.json")
 BODY_LIMIT = 4000
+THREAD_BODY_LIMIT = 3000
 
 _BLOCK_RE = re.compile(r"(?is)<(script|style).*?>.*?</\1>|<!--.*?-->")
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 
 
+def _token_scopes() -> set[str] | None:
+    if not TOKEN_PATH.exists():
+        return None
+    try:
+        data = json.loads(TOKEN_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return set()
+    raw = data.get("scopes") or []
+    if isinstance(raw, str):
+        raw = raw.split()
+    return {str(scope) for scope in raw}
+
+
+def _drop_token_without_compose() -> None:
+    scopes = _token_scopes()
+    if scopes is None or _COMPOSE_SCOPE in scopes:
+        return
+    print(
+        "token.json lacks gmail.compose. Deleting it and signing in again.",
+        file=sys.stderr,
+    )
+    TOKEN_PATH.unlink()
+
+
 def _service():
+    _drop_token_without_compose()
     creds = None
     if TOKEN_PATH.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
@@ -63,7 +96,7 @@ def _parts(payload: dict) -> tuple[str | None, str | None]:
     return plain, html
 
 
-def _body_text(payload: dict) -> str:
+def _body_text(payload: dict, limit: int = BODY_LIMIT) -> str:
     plain, html = _parts(payload)
     if plain:
         text = plain.strip()
@@ -71,7 +104,14 @@ def _body_text(payload: dict) -> str:
         text = _WS_RE.sub(" ", unescape(_TAG_RE.sub(" ", _BLOCK_RE.sub(" ", html)))).strip()
     else:
         text = ""
-    return text[:BODY_LIMIT]
+    return text[:limit]
+
+
+def _reply_subject(subject: str) -> str:
+    text = " ".join(subject.split())
+    if text.lower().startswith("re:"):
+        return text
+    return f"Re: {text}" if text else "Re:"
 
 
 def _header(headers: list[dict], name: str) -> str:
@@ -156,3 +196,54 @@ def fetch_job_emails(days: int | None = None, max_results: int | None = None) ->
             )
         )
     return emails
+
+
+def get_thread(thread_id: str) -> list[dict[str, str]]:
+    service = _service()
+    thread = (
+        service.users().threads().get(userId="me", id=thread_id, format="full").execute()
+    )
+    messages: list[dict[str, str]] = []
+    for message in thread.get("messages") or []:
+        payload = message.get("payload") or {}
+        headers = payload.get("headers") or []
+        messages.append(
+            {
+                "from": _header(headers, "From"),
+                "to": _header(headers, "To"),
+                "date": _header(headers, "Date"),
+                "subject": _header(headers, "Subject"),
+                "body_text": _body_text(payload, THREAD_BODY_LIMIT),
+                "message_id": _header(headers, "Message-ID"),
+            }
+        )
+    return messages
+
+
+def create_draft(
+    thread_id: str,
+    to: str,
+    subject: str,
+    body: str,
+    in_reply_to_message_id: str,
+) -> dict[str, str]:
+    message = EmailMessage()
+    message["To"] = to
+    message["Subject"] = _reply_subject(subject)
+    if in_reply_to_message_id:
+        message["In-Reply-To"] = in_reply_to_message_id
+        message["References"] = in_reply_to_message_id
+    message.set_content(body)
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii")
+    service = _service()
+    created = (
+        service.users()
+        .drafts()
+        .create(
+            userId="me",
+            body={"message": {"raw": raw, "threadId": thread_id}},
+        )
+        .execute()
+    )
+    saved = created.get("message") or {}
+    return {"id": created.get("id", ""), "thread_id": saved.get("threadId", thread_id)}

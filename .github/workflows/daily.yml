@@ -2,6 +2,11 @@ name: Daily job emails
 
 on:
   workflow_dispatch:
+    inputs:
+      draft_replies:
+        description: Create follow-up drafts after the summary
+        type: boolean
+        default: false
   schedule:
     # 02:45 UTC is 08:15 IST. India does not use daylight saving time.
     - cron: "45 2 * * *"
@@ -54,3 +59,7 @@ jobs:
           key: processed-ids
 
       - run: python -m job_email_reader.cli summary --model groq
+
+      - name: Draft follow-up replies
+        if: ${{ github.event.inputs.draft_replies == 'true' || vars.DRAFT_REPLIES == 'true' }}
+        run: python -m job_email_reader.cli draft-replies --model groq

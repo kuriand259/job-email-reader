@@ -436,6 +436,27 @@ def find_application(company: str, role: str | None = None) -> str | None:
     return page["id"]
 
 
+def lookup_tracker_row(company: str) -> dict[str, Any]:
+    page = _find_page(_client(), company, None)
+    if page is None:
+        return {"found": False, "company": company}
+    props = page.get("properties") or {}
+
+    def value(label: str) -> str:
+        name, _prop_type = _field(props, label)
+        return _plain(props.get(name))
+
+    return {
+        "found": True,
+        "company": value("Company") or company,
+        "role": value("Role"),
+        "status": value("Status"),
+        "last_update": value("Last update"),
+        "next_step": value("Next step"),
+        "thread_id": value("Thread ID"),
+    }
+
+
 def _properties(
     properties: dict[str, Any],
     *,

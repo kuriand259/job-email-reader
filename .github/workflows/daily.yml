@@ -5,6 +5,8 @@ name: Daily job emails
   schedule:
     - cron: "15 8 * * *"
       timezone: "Asia/Kolkata"
+    - cron: "15 11 * * *"
+      timezone: "Asia/Kolkata"
 
 permissions:
   actions: write

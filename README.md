@@ -29,9 +29,28 @@ python -m job_email_reader.cli classify --model groq
 python -m job_email_reader.cli summary --model groq
 ```
 
-## GitHub cron
+## Scheduled run
 
-GitHub Actions can run that pair every day while this computer is off. Put the workflow in `.github/workflows/daily.yml`. The cron is `45 2 * * *`, which is 02:45 UTC and 8:15 IST. The schedule can start late. **Run workflow** on the Actions tab starts it by hand.
+GitHub Actions runs that pair while this computer is off. The workflow is `.github/workflows/daily.yml`.
+
+GitHub's own `schedule` cron is not reliable. It queues the run and can start it late, and under load it can skip the day without recording a failure. The morning job is started with `workflow_dispatch` instead. [cron-job.org](https://cron-job.org) sends that request at 8:15 Asia/Kolkata. A `204` response means GitHub accepted it. The Actions run, not the cron test, writes to Notion.
+
+```text
+POST https://api.github.com/repos/kuriand259/job-email-reader/actions/workflows/daily.yml/dispatches
+```
+
+```text
+Accept: application/vnd.github+json
+Authorization: Bearer <token>
+User-Agent: job-email-reader
+Content-Type: application/json
+```
+
+```json
+{"ref":"master"}
+```
+
+The token is a fine-grained personal access token for **kuriand259**, limited to this repository, with **Actions** set to **Read and write**. It stays in cron-job.org. The same trigger from this computer is `gh workflow run daily.yml --ref master`, and **Run workflow** on the Actions tab does it by hand. The file still has a `45 2 * * *` schedule, 8:15 IST, as a backup.
 
 Each run is a blank machine, so the Gmail login and `.env` are stored as secrets rather than committed. From the project directory:
 

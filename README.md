@@ -31,7 +31,7 @@ python -m job_email_reader.cli summary --model groq
 
 ## GitHub cron
 
-GitHub Actions can run that pair every day while this computer is off. Put the workflow in `.github/workflows/daily.yml`. It runs at 8:15 Asia/Kolkata from the default branch. The schedule can start late. **Run workflow** on the Actions tab starts it by hand.
+GitHub Actions can run that pair every day while this computer is off. Put the workflow in `.github/workflows/daily.yml`. The cron is `45 2 * * *`, which is 02:45 UTC and 8:15 IST. The schedule can start late. **Run workflow** on the Actions tab starts it by hand.
 
 Each run is a blank machine, so the Gmail login and `.env` are stored as secrets rather than committed. From the project directory:
 

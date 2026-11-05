@@ -1,12 +1,10 @@
 name: Daily job emails
 
-"on":
+on:
   workflow_dispatch:
   schedule:
-    - cron: "15 8 * * *"
-      timezone: "Asia/Kolkata"
-    - cron: "50 11 * * *"
-      timezone: "Asia/Kolkata"
+    # 02:45 UTC is 08:15 IST. India does not use daylight saving time.
+    - cron: "45 2 * * *"
 
 permissions:
   actions: write
